@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build outputs
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+.lineage/
+.cache/
+
+# VSCode test binaries (too large)
+vscode-extension/.vscode-test/
+
+# Large build artifacts
+vscode-extension/node_modules/
+vscode-extension/.git/
+
+# Temp files
+tmp-jaffle-shop/.dbt/
+tmp-jaffle-shop/target/
+tmp-jaffle-shop/logs/
+*.log

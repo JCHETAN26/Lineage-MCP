@@ -1,0 +1,71 @@
+LINEAGE MCP: MASTER PRODUCT SPECIFICATION & ROADMAP
+
+1. OVERVIEW
+Lineage is a high-authority Model Context Protocol (MCP) server designed to act as an automated "Data Contract Sentinel" within the IDE. It bridges the gap between Software Engineers (SDEs), Data Engineers (DEs), and ML Engineers by mapping dependencies between data schemas and code logic.
+
+The core value proposition is the prevention of "Silent Data Breaks"—situations where a structural change in a database (like renaming a column) causes downstream failures in ML models or analytics pipelines that the developer is unaware of at the time of coding.
+
+2. CORE FUNCTIONALITIES
+- Deep Lineage Mapping: Scans the local repository to identify SQL table definitions, Python data-loading logic (Pandas, SQLAlchemy, PySpark), and TypeScript API endpoints.
+- AI-Native Impact Analysis: Provides a specialized tool for AI Agents (Claude, Cursor) to "check impact" before proposing code edits.
+- Zero-Config Deployment: Distributed as a globally executable npm package via npx.
+
+3. TECHNICAL ARCHITECTURE
+- Language: TypeScript (Node.js ESM)
+- Protocol: Model Context Protocol (MCP) over Stdio
+- Parser Engine: Hybrid approach using Tree-sitter (AST) for precision and high-performance Regex for initial broad-stroke scanning.
+- Persistence: Local in-memory graph for speed, with an optional SQLite-based cache in .lineage/ for large-scale repositories.
+
+4. IMPLEMENTATION PHASES
+
+PHASE 1: SDK & ENVIRONMENT SETUP
+- Goal: Establish the MCP communication bridge.
+- Tasks:
+    - Initialize NPM project with TypeScript.
+    - Install @modelcontextprotocol/sdk and Zod for schema validation.
+    - Build a basic "Hello World" MCP tool to verify IDE connectivity.
+
+PHASE 2: THE MULTI-LANGUAGE CRAWLER
+- Goal: Build the "Senses" of the lineage engine.
+- Tasks:
+    - SQL Scanner: Identify CREATE, ALTER, and DROP statements.
+    - Python Scanner: Detect data-access patterns (pd.read_sql, session.query).
+    - Map Generator: Create a JSON-based dependency graph (Table Name -> List of Files).
+
+PHASE 3: THE IMPACT ENGINE (MCP TOOLS)
+- Goal: Enable AI agents to perform automated impact audits.
+- Tool 1: `check_impact`
+    - Logic: Input a schema change; return a report of all downstream consumers (files and line numbers).
+- Tool 2: `list_lineage`
+    - Logic: Return the entire dependency chain for a specific data asset.
+
+PHASE 4: VERIFICATION & PERFECTION
+- Goal: Ensure "Senior SDE" level quality.
+- Tasks:
+    - Implement a "Zero-Noise" filter: Distinguish between database columns and identically named local variables.
+    - Performance Tuning: Ensure the crawler can handle 10,000+ files in under 3 seconds using parallel worker threads.
+    - Error Handling: Ensure the server never crashes on malformed SQL or Python syntax.
+
+PHASE 5: NPM PACKAGING & LAUNCH
+- Goal: Frictionless user adoption.
+- Tasks:
+    - Configure the "bin" field in package.json for npx support.
+    - Write a descriptive README with GIF demos.
+    - Publish to NPM registry under a public scope.
+
+5. QUALITY CONTROL CHECKLIST
+- Does it catch column renames in SQL? (Yes/No)
+- Does it alert Python ML scripts when their source table changes? (Yes/No)
+- Is it compatible with Cursor, Claude Desktop, and VS Code Insiders? (Yes/No)
+- Does it run locally without sending data to an external cloud? (Yes/No)
+
+6. USAGE INSTRUCTIONS
+Users install the server by adding the following to their AI client configuration:
+{
+  "mcpServers": {
+    "lineage": {
+      "command": "npx",
+      "args": ["-y", "@your-scope/lineage"]
+    }
+  }
+}

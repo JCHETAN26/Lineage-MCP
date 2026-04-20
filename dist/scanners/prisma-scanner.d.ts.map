@@ -1,0 +1,1 @@
+{"version":3,"file":"prisma-scanner.d.ts","sourceRoot":"","sources":["../../src/scanners/prisma-scanner.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,SAAS,EAAa,MAAM,aAAa,CAAC;AAMxD,wBAAgB,gBAAgB,CAAC,OAAO,EAAE,MAAM,EAAE,QAAQ,EAAE,MAAM,GAAG,SAAS,EAAE,CAmB/E"}

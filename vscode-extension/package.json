@@ -1,0 +1,76 @@
+{
+  "name": "lineage-mcp-vscode",
+  "displayName": "Lineage MCP",
+  "description": "Data Contract Sentinel — prevents silent data breaks by showing live dependency counts inline.",
+  "version": "0.1.0",
+  "publisher": "cjitendr",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:lineage.checkImpact",
+    "onCommand:lineage.exportDebugLog",
+    "onCommand:lineage.showLineage",
+    "onCommand:lineage.rescan",
+    "onLanguage:sql",
+    "onLanguage:python",
+    "onLanguage:typescript",
+    "onLanguage:javascript"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "lineage.checkImpact",
+        "title": "Lineage: Check Impact of Current File"
+      },
+      {
+        "command": "lineage.showLineage",
+        "title": "Lineage: Show Lineage Tree"
+      },
+      {
+        "command": "lineage.rescan",
+        "title": "Lineage: Rescan Workspace"
+      },
+      {
+        "command": "lineage.exportDebugLog",
+        "title": "Lineage: Export Debug Log"
+      }
+    ],
+    "configuration": {
+      "title": "Lineage MCP",
+      "properties": {
+        "lineage.rootDir": {
+          "type": "string",
+          "default": "",
+          "description": "Root directory to scan (defaults to workspace root)"
+        },
+        "lineage.autoScanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically check impact when a SQL file is saved"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node src/test/integration/bridge.test.mjs",
+    "test:vscode": "node build.mjs --tests && node dist/test/runTests.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.20.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.3.0"
+  }
+}

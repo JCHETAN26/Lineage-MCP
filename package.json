@@ -1,0 +1,41 @@
+{
+  "name": "@cjitendr/lineage-mcp",
+  "version": "0.1.0",
+  "description": "Data Contract Sentinel — MCP server for automated lineage tracking and silent data break prevention",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "lineage-mcp": "dist/index.js",
+    "lineage": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "cli": "node dist/cli.js",
+    "start": "node dist/index.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "files": [
+    "dist/"
+  ],
+  "keywords": [
+    "mcp",
+    "data-lineage",
+    "schema",
+    "sql",
+    "data-contract"
+  ],
+  "license": "MIT"
+}

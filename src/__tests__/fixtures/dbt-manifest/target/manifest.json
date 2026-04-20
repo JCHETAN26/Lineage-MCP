@@ -1,0 +1,41 @@
+{
+  "nodes": {
+    "model.jaffle_shop.orders": {
+      "unique_id": "model.jaffle_shop.orders",
+      "resource_type": "model",
+      "name": "orders",
+      "original_file_path": "models/orders.sql",
+      "depends_on": {
+        "nodes": ["model.jaffle_shop.stg_orders"]
+      },
+      "columns": {
+        "order_id": { "name": "order_id", "data_type": "integer" },
+        "amount": { "name": "amount", "data_type": "numeric" }
+      }
+    },
+    "model.jaffle_shop.stg_orders": {
+      "unique_id": "model.jaffle_shop.stg_orders",
+      "resource_type": "model",
+      "name": "stg_orders",
+      "original_file_path": "models/staging/stg_orders.sql",
+      "depends_on": {
+        "nodes": ["source.jaffle_shop.raw.raw_orders"]
+      },
+      "columns": {
+        "order_id": { "name": "order_id", "data_type": "integer" }
+      }
+    }
+  },
+  "sources": {
+    "source.jaffle_shop.raw.raw_orders": {
+      "unique_id": "source.jaffle_shop.raw.raw_orders",
+      "resource_type": "source",
+      "source_name": "raw",
+      "name": "raw_orders",
+      "original_file_path": "models/staging/stg_orders.sql",
+      "columns": {
+        "id": { "name": "id", "data_type": "integer" }
+      }
+    }
+  }
+}

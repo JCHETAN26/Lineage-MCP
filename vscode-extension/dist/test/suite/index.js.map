@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/test/suite/index.ts"],
+  "sourcesContent": ["import Mocha from 'mocha';\nimport * as path from 'path';\n\nexport async function run(): Promise<void> {\n  const mocha = new Mocha({\n    ui: 'tdd',\n    color: true,\n    timeout: 30_000, // scanning can take a few seconds\n  });\n\n  mocha.addFile(path.join(__dirname, 'extension.test.js'));\n\n  return new Promise<void>((resolve, reject) => {\n    mocha.run((failures) => {\n      failures > 0\n        ? reject(new Error(`${failures} test(s) failed`))\n        : resolve();\n    });\n  });\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA,mBAAkB;AAClB,WAAsB;AAEtB,eAAsB,MAAqB;AACzC,QAAM,QAAQ,IAAI,aAAAA,QAAM;AAAA,IACtB,IAAI;AAAA,IACJ,OAAO;AAAA,IACP,SAAS;AAAA;AAAA,EACX,CAAC;AAED,QAAM,QAAa,UAAK,WAAW,mBAAmB,CAAC;AAEvD,SAAO,IAAI,QAAc,CAAC,SAAS,WAAW;AAC5C,UAAM,IAAI,CAAC,aAAa;AACtB,iBAAW,IACP,OAAO,IAAI,MAAM,GAAG,QAAQ,iBAAiB,CAAC,IAC9C,QAAQ;AAAA,IACd,CAAC;AAAA,EACH,CAAC;AACH;",
+  "names": ["Mocha"]
+}
