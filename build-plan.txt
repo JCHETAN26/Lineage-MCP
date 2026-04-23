@@ -1,0 +1,67 @@
+This build plan evolves your project from a passive scanner into an Agentic Data Janitor. By the end of this plan, your tool won't just say "this is broken," it will say "I've detected the break, mapped the impact across your SQL and Python, and opened a PR to fix it."
+
+🛠️ Build Plan: The Agentic Data Janitor
+🎯 Vision
+Transform Lineage-MCP from a Discovery Tool into a Remediation Agent. It will leverage its existing graph to provide AI agents with the "hands" to fix the very "silent breaks" it discovers.
+
+🏗️ Phase 1: The "Action" Infrastructure (Week 1)
+Goal: Enable the server to safely modify code based on lineage insights.
+
+1.1 The File Patcher (src/janitor/patcher.ts)
+Safety First: Implement a writeWithBackup utility that creates .bak files before any mutation.
+
+Atomic Operations: Ensure that if a multi-file patch fails, the system can rollback.
+
+Dry-Run Mode: Add a global configuration to log intended changes to the console instead of writing to disk.
+
+1.2 Tool: apply_remediation
+Input: Target file path, original code snippet, and the replacement code.
+
+Logic: 1.  Validate that the original snippet exists in the target file.
+2.  Execute the replacement.
+3.  Trigger a re-scan of the affected file to update the Lineage Graph.
+
+🛡️ Phase 2: AI Security & Governance (Week 2)
+Goal: Use your "AI Shield" background to automate compliance.
+
+2.1 Tool: audit_pii_compliance
+Logic: Scan the discovered assets in the graph for "High-Risk" names (SSN, Email, IBAN, Phone).
+
+Semantic Check: If a column name is ambiguous (e.g., id_val), use a local SLM (Small Language Model) or regex patterns to flag it as PII.
+
+Output: A compliance report highlighting where sensitive data flows in the lineage tree.
+
+2.2 Tool: sync_dbt_metadata
+Logic: Cross-reference manifest.json with the current SQL definitions.
+
+Action: If a new column was added to a SQL table but is missing in the dbt YAML, the Janitor automatically generates the missing YAML block.
+
+🚀 Phase 3: Distribution & "The Edge" (Week 3)
+Goal: Make the project "NPM-Installable" and recruiter-ready.
+
+3.1 CLI & Packaging
+Bin Entry: Create bin/lineage-mcp.js to allow npx lineage-mcp.
+
+CI/CD: Setup GitHub Actions to run your stress tests and auto-publish to NPM/GitHub Packages.
+
+3.2 The "Proof-of-Work" Visualizer
+Static Report: Generate a lineage_health_report.md after every scan.
+
+Visual Edge: Include a Mermaid.js dependency graph in the report so recruiters can see the lineage without running the code.
+
+📋 Updated Project Structure
+Plaintext
+lineage-mcp/
+├── src/
+│   ├── janitor/              <-- NEW: Active Remediation Layer
+│   │   ├── patcher.ts        # File mutation & backup logic
+│   │   ├── compliance.ts     # PII & Security auditing
+│   │   └── dbt-sync.ts       # YAML & Manifest alignment
+│   ├── scanners/             # Existing SQL, Py, TS scanners
+│   ├── tools/
+│   │   ├── check-impact.ts
+│   │   └── apply-patch.ts    <-- NEW: The "Action" Tool
+│   └── index.ts              # Entry point (Register new tools)
+├── bin/
+│   └── cli.js                # Support for 'npx lineage-mcp'
+└── package.json              # Added 'bin' and 'publishConfig'

@@ -6,6 +6,10 @@ import { crawl } from "./crawler.js";
 import { saveGraph, loadGraph } from "./cache.js";
 import { checkImpact, CheckImpactSchema } from "./tools/check-impact.js";
 import { listLineage, listAllTables, ListLineageSchema } from "./tools/list-lineage.js";
+import { applyRemediation, ApplyRemediationSchema } from "./tools/apply-remediation.js";
+import { auditPIIComplianceTool, AuditPIIComplianceMCPSchema } from "./tools/audit-pii-compliance.js";
+import { syncDbtMetadataTool, SyncDbtMetadataMCPSchema } from "./tools/sync-dbt-metadata.js";
+import { generateHealthReportTool, GenerateHealthReportSchema } from "./tools/generate-health-report.js";
 import { resolve } from "path";
 const server = new Server({ name: "lineage-mcp", version: "0.2.0" }, { capabilities: { tools: {} } });
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -84,6 +88,72 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: "Return the bundled sample project path and quick-start instructions.",
             inputSchema: { type: "object", properties: {}, required: [] },
         },
+        {
+            name: "apply_remediation",
+            description: "Apply an automated fix to a file by replacing a code snippet. Creates backups before modifying. Supports dry-run mode.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    filePath: { type: "string", description: "Path to the file to patch" },
+                    originalSnippet: { type: "string", description: "The code snippet to find and replace" },
+                    replacementSnippet: { type: "string", description: "The new code snippet to insert" },
+                    description: { type: "string", description: "Human-readable description of the fix" },
+                    dryRun: { type: "boolean", default: false, description: "Preview the change without applying it" },
+                    backupDir: { type: "string", default: ".lineage/backups", description: "Directory for backup files" },
+                },
+                required: ["filePath", "originalSnippet", "replacementSnippet", "description"],
+            },
+        },
+        {
+            name: "audit_pii_compliance",
+            description: "Audit the lineage graph for PII exposure. Scans table and column names for sensitive data patterns and tracks downstream flows.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    tables: { type: "array", items: { type: "string" }, description: "Specific tables to audit (empty = all)" },
+                },
+                required: [],
+            },
+        },
+        {
+            name: "sync_dbt_metadata",
+            description: "Synchronize discovered SQL columns with dbt YAML metadata. Identifies missing or new columns in dbt model definitions.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    dbtManifestPath: { type: "string", description: "Path to dbt manifest.json" },
+                    sqlFilePath: { type: "string", description: "Path to SQL model file" },
+                    columns: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                name: { type: "string" },
+                                description: { type: "string" },
+                                dataType: { type: "string" },
+                            },
+                            required: ["name"],
+                        },
+                        description: "Discovered columns from SQL",
+                    },
+                    dryRun: { type: "boolean", default: false, description: "Preview changes without writing" },
+                },
+                required: ["dbtManifestPath", "sqlFilePath", "columns"],
+            },
+        },
+        {
+            name: "generate_health_report",
+            description: "Generate a comprehensive health report for the lineage graph with metrics, recommendations, and visual dependency diagram.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    rootDir: { type: "string", default: ".", description: "Root directory to scan" },
+                    outputPath: { type: "string", description: "Path to write the health report (optional)" },
+                    includeDiagram: { type: "boolean", default: true, description: "Include Mermaid diagram" },
+                },
+                required: [],
+            },
+        },
     ],
 }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -133,6 +203,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const text = tables.length === 0
                 ? "No tables or ML assets found."
                 : `Discovered assets (${tables.length}):\n${tables.map((t) => `  • ${t}`).join("\n")}`;
+            return { content: [{ type: "text", text }] };
+        }
+        if (name === "apply_remediation") {
+            const input = ApplyRemediationSchema.parse(a);
+            const result = await applyRemediation(input);
+            const text = `## Remediation Result\n` +
+                `**File**: ${result.filePath}\n` +
+                `**Status**: ${result.success ? "✅ Success" : "❌ Failed"}\n` +
+                `**Message**: ${result.message}\n` +
+                `**Verified**: ${result.verified ? "✅" : "⚠️"}\n` +
+                `**Dry Run**: ${result.dryRun ? "Yes (no files modified)" : "No (files were modified)"}\n` +
+                (result.backupPath ? `**Backup**: ${result.backupPath}` : "");
+            return { content: [{ type: "text", text }] };
+        }
+        if (name === "audit_pii_compliance") {
+            const input = AuditPIIComplianceMCPSchema.parse(a);
+            const rootDir = a.rootDir ?? ".";
+            const graph = await getGraph(rootDir);
+            const report = await auditPIIComplianceTool(input, graph);
+            const text = formatPIIComplianceReport(report);
+            return { content: [{ type: "text", text }] };
+        }
+        if (name === "sync_dbt_metadata") {
+            const input = SyncDbtMetadataMCPSchema.parse(a);
+            const result = await syncDbtMetadataTool(input);
+            const text = `## dbt Metadata Sync Result\n` +
+                `**Model**: ${result.modelName}\n` +
+                `**Status**: ${result.success ? "✅ Success" : "❌ Failed"}\n` +
+                `**Message**: ${result.message}\n` +
+                `**New Columns**: ${result.newColumns.length > 0 ? result.newColumns.join(", ") : "None"}\n` +
+                `**Missing Columns**: ${result.missingColumns.length > 0 ? result.missingColumns.join(", ") : "None"}\n` +
+                `**YAML Updated**: ${result.yamlUpdated ? "Yes" : "No"}`;
+            return { content: [{ type: "text", text }] };
+        }
+        if (name === "generate_health_report") {
+            const input = GenerateHealthReportSchema.parse(a);
+            const graph = await getGraph(input.rootDir);
+            const report = await generateHealthReportTool(input, graph);
+            const text = formatHealthReportSummary(report);
             return { content: [{ type: "text", text }] };
         }
         return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
@@ -206,10 +315,67 @@ function formatWarningsBlock(warnings) {
         return "";
     return `\nWarnings:\n${warnings.map((warning) => `  - ${warning}`).join("\n")}`;
 }
+function formatPIIComplianceReport(report) {
+    const lines = [
+        `## PII Compliance Audit Report`,
+        `**Timestamp**: ${report.timestamp}`,
+        `**Tables Scanned**: ${report.totalTablesScanned}`,
+        `**Findings**: ${report.findingsCount}`,
+        ``,
+        `**Summary**: ${report.summary}`,
+    ];
+    if (report.findings.length > 0) {
+        lines.push(``, `### Findings`);
+        for (const finding of report.findings) {
+            lines.push(``, `**${finding.table}.${finding.column}** [${finding.riskLevel.toUpperCase()}]`, `Reason: ${finding.reason}`);
+            if (finding.flows.length > 0) {
+                lines.push(`Flows to:`, ...finding.flows.map((f) => `  - ${f.toFile}:${f.toLine}`));
+            }
+        }
+    }
+    return lines.join("\n");
+}
 function capitalizeEvidence(value) {
     if (!value)
         return "Unknown";
     return value[0].toUpperCase() + value.slice(1);
+}
+function formatHealthReportSummary(report) {
+    const healthEmoji = report.summary.healthScore >= 80
+        ? "🟢"
+        : report.summary.healthScore >= 50
+            ? "🟡"
+            : "🔴";
+    const lines = [
+        `## Lineage Health Report`,
+        `Timestamp: ${report.timestamp}`,
+        ``,
+        `${healthEmoji} **Health Score**: ${report.summary.healthScore}/100`,
+        ``,
+        `### Metrics`,
+        `- **Total Tables**: ${report.summary.totalTables}`,
+        `- **Total Dependencies**: ${report.summary.totalDependencies}`,
+        `- **Files Scanned**: ${report.summary.filesScanned}`,
+    ];
+    if (report.warnings.length > 0) {
+        lines.push(``, `### Warnings`);
+        for (const warning of report.warnings) {
+            lines.push(`- ⚠️ ${warning}`);
+        }
+    }
+    if (report.recommendations.length > 0) {
+        lines.push(``, `### Recommendations`);
+        for (const rec of report.recommendations) {
+            lines.push(`- ${rec}`);
+        }
+    }
+    if (report.mermaidDiagram) {
+        lines.push(``, `### Dependency Graph`);
+        lines.push("```mermaid");
+        lines.push(report.mermaidDiagram);
+        lines.push("```");
+    }
+    return lines.join("\n");
 }
 async function main() {
     const transport = new StdioServerTransport();
