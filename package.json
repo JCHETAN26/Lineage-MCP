@@ -3,6 +3,21 @@
   "version": "1.0.0",
   "description": "Data Contract Sentinel — MCP server for automated lineage tracking and silent data break prevention",
   "type": "module",
+  "author": "JCHETAN26",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JCHETAN26/Lineage-MCP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JCHETAN26/Lineage-MCP/issues"
+  },
+  "homepage": "https://github.com/JCHETAN26/Lineage-MCP#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "bin": {
     "lineage-mcp": "dist/index.js",
