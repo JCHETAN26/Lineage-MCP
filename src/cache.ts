@@ -6,13 +6,19 @@ import { createGraph } from "./graph.js";
 interface CacheFile {
   version: number;
   scannedAt: number;
+  /** Absolute path of the rootDir the cache was built against. Cache is
+   * invalidated if loaded with a different rootDir — guards against stale
+   * caches written by another machine (e.g., Docker mount with `/app/...`
+   * paths read on macOS where those files don't exist). */
+  rootDir?: string;
   manifestPath?: string;
   manifestMtimeMs?: number;
   tables: Array<[string, TableNode]>;
   dependencies: DependencyNode[];
 }
 
-const CACHE_VERSION = 1;
+// Bump version any time the CacheFile shape changes incompatibly.
+const CACHE_VERSION = 2;
 
 function cacheDir(rootDir: string): string {
   return join(rootDir, ".lineage");
@@ -30,6 +36,7 @@ export function saveGraph(rootDir: string, graph: LineageGraph): void {
     const payload: CacheFile = {
       version: CACHE_VERSION,
       scannedAt: Date.now(),
+      rootDir,
       ...getManifestState(rootDir),
       tables: Array.from(graph.tables.entries()),
       dependencies: graph.dependencies,
@@ -51,6 +58,10 @@ export function loadGraph(rootDir: string, maxAgeMs: number): LineageGraph | nul
 
     if (payload.version !== CACHE_VERSION) return null;
     if (Date.now() - payload.scannedAt > maxAgeMs) return null;
+    // Reject caches written against a different rootDir (different machine,
+    // different mount point, project moved). Without this, absolute file
+    // paths embedded in cached dependencies become bogus.
+    if (payload.rootDir && payload.rootDir !== rootDir) return null;
     if (hasManifestChanged(rootDir, payload)) return null;
 
     const graph = createGraph();

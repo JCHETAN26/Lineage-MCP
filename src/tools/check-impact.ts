@@ -46,14 +46,17 @@ export async function checkImpact(
         if (!columnMatchForDependency(content, dep, table, column)) return null;
       }
 
-      // Boost confidence if explicit column dep; keep dep confidence otherwise
+      // Confidence should not be downgraded just because the user supplied a
+      // column. We already verified the column literal appears in the file
+      // (columnMatchForDependency above), so the dep's original confidence
+      // is the honest signal. Earlier versions blanket-downgraded to "medium"
+      // whenever `column` was set, producing confidence drift between
+      // list_lineage and check_impact for the same finding.
       const isExplicitColDep = columnDeps.some(
         (c) => c.filePath === dep.filePath && c.line === dep.line
       );
       const confidence: "high" | "medium" | "low" = isExplicitColDep
         ? "high"
-        : column
-        ? "medium"
         : dep.confidence;
 
       return {

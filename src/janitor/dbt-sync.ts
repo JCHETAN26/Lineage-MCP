@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { readFile, writeFile } from "fs/promises";
+import { existsSync } from "fs";
 import { basename } from "path";
+import yaml from "js-yaml";
 
 export const SyncDbtMetadataSchema = z.object({
   dbtManifestPath: z.string().describe("Path to dbt manifest.json"),
@@ -24,20 +26,20 @@ export interface DbtSyncResult {
   yamlUpdated: boolean;
 }
 
-/**
- * Generate a dbt YAML block for columns
- */
-function generateDbtYamlColumns(columns: Array<{ name: string; description?: string }>): string {
-  const lines = ["  columns:"];
+interface DbtColumnEntry {
+  name: string;
+  description?: string;
+  data_type?: string;
+}
 
-  for (const col of columns) {
-    lines.push(`    - name: ${col.name}`);
-    if (col.description) {
-      lines.push(`      description: "${col.description}"`);
-    }
-  }
+interface DbtModelEntry {
+  name: string;
+  columns?: DbtColumnEntry[];
+}
 
-  return lines.join("\n");
+interface DbtSchemaFile {
+  version?: number;
+  models?: DbtModelEntry[];
 }
 
 /**
@@ -112,16 +114,49 @@ export async function syncDbtMetadata(
       };
     }
 
-    // In production, would generate/update the YAML file
-    // For now, just report what would be done
-    const yamlBlock = generateDbtYamlColumns(
-      columns.filter((col) => newColumns.includes(col.name))
-    );
+    // Locate the YAML file that documents this model. dbt's manifest stores
+    // it as `patch_path` on the node. Without it we cannot safely modify
+    // anything — fail loud rather than silently claiming success.
+    const patchPath: string | undefined = modelNode.patch_path;
+    if (!patchPath || !existsSync(patchPath)) {
+      return {
+        success: false,
+        modelName,
+        message:
+          `Cannot sync: dbt patch_path for '${modelName}' is missing or unreadable. ` +
+          `Add a schema.yml entry for this model first, then re-run.`,
+        newColumns,
+        missingColumns,
+        yamlUpdated: false,
+      };
+    }
+
+    const yamlText = await readFile(patchPath, "utf-8");
+    const parsed = (yaml.load(yamlText) as DbtSchemaFile | null) ?? { version: 2, models: [] };
+    parsed.models = parsed.models ?? [];
+
+    let model = parsed.models.find((m) => m.name === modelName);
+    if (!model) {
+      model = { name: modelName, columns: [] };
+      parsed.models.push(model);
+    }
+    model.columns = model.columns ?? [];
+
+    const existingNames = new Set(model.columns.map((c) => c.name));
+    for (const col of columns) {
+      if (existingNames.has(col.name)) continue;
+      const entry: DbtColumnEntry = { name: col.name };
+      if (col.description) entry.description = col.description;
+      model.columns.push(entry);
+    }
+
+    const out = yaml.dump(parsed, { indent: 2, lineWidth: 120 });
+    await writeFile(patchPath, out, "utf-8");
 
     return {
       success: true,
       modelName,
-      message: `Would sync metadata for '${modelName}'. Generated YAML:\n${yamlBlock}`,
+      message: `Synced metadata for '${modelName}'. Added ${newColumns.length} column(s) to ${patchPath}.`,
       newColumns,
       missingColumns,
       yamlUpdated: true,

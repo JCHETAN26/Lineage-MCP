@@ -40,6 +40,7 @@ export function listLineage(input: ListLineageInput, graph: LineageGraph): Linea
 
   return {
     asset: { table, column },
+    definition: graph.tables.get(table),
     consumers,
     upstream,
     tree,

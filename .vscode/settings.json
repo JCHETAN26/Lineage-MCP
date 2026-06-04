@@ -1,0 +1,15 @@
+{
+  "claude.mcp.servers": {
+    "lineage": {
+      "command": "node",
+      "args": ["/Users/chetan/Lineage-MCP/dist/index.js"],
+      "env": {
+        "LINEAGE_ROOT": "/Users/chetan/Lineage-MCP"
+      }
+    },
+    "jobsync": {
+      "command": "node",
+      "args": ["path/to/jobsync"]
+    }
+  }
+}

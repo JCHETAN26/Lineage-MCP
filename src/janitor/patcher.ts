@@ -89,8 +89,11 @@ export async function applyPatch(
     const backupPath = generateBackupPath(filePath, backupRoot);
     await writeFile(backupPath, originalContent);
 
-    // Apply replacement
-    const newContent = originalContent.replace(original, replacement);
+    // Apply replacement to ALL occurrences. JS `replace(str, str)` only swaps
+    // the first match — that silently corrupts files that contain the snippet
+    // more than once (e.g., two `pd.read_sql` calls referencing the same
+    // column). split/join makes the operation idempotent and complete.
+    const newContent = originalContent.split(original).join(replacement);
 
     // Ensure directory exists for target file
     await mkdir(dirname(filePath), { recursive: true });

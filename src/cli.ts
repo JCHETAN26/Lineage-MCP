@@ -3,8 +3,10 @@ import { resolve } from "path";
 import { crawl } from "./crawler.js";
 import { checkImpact } from "./tools/check-impact.js";
 import { listAllTables, listLineage } from "./tools/list-lineage.js";
+import { generateHealthReportTool } from "./tools/generate-health-report.js";
+import { formatHealthReportMarkdown } from "./janitor/report-generator.js";
 
-type Command = "scan" | "tables" | "lineage" | "impact" | "help";
+type Command = "scan" | "tables" | "lineage" | "impact" | "health" | "help";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -89,6 +91,9 @@ async function main(): Promise<void> {
 
     const column = getFlag(args, "--column");
     const newName = getFlag(args, "--new-name");
+    if (changeType === "rename" && !newName) {
+      fail("--change rename requires --new-name <name>");
+    }
 
     const graph = await crawl({ rootDir: resolvedRoot });
     const result = await checkImpact(
@@ -126,6 +131,21 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "health") {
+    const graph = await crawl({ rootDir: resolvedRoot });
+    const report = await generateHealthReportTool(
+      {
+        rootDir: resolvedRoot,
+        includeDiagram: true,
+      },
+      graph
+    );
+
+    printSection("Health Report");
+    console.log(formatHealthReportMarkdown(report));
+    return;
+  }
+
   fail(`Unknown command: ${command}`);
 }
 
@@ -135,20 +155,28 @@ function capitalize(value?: string): string {
 }
 
 function printHelp(): void {
-  console.log(`Lineage CLI
+  console.log(`Lineage CLI — Data Contract Sentinel
+
+Usage:
+  lineage <command> [options]
 
 Commands:
   scan --root <dir>
+      Crawl a project and report counts.
   tables --root <dir>
+      List every discovered table / asset.
   lineage <table> --root <dir>
+      Show consumers, upstream tables, and definition for a table.
   impact <table> --change <rename|delete|type_change|add> [--column <name>] [--new-name <name>] --root <dir>
+      Report files affected by a schema change.
+  health --root <dir>
+      Generate a health report with metrics and a Mermaid diagram.
 
 Examples:
-  node dist/cli.js scan --root ./demo
-  node dist/cli.js tables --root /Users/chetan/Lineage-MCP/tmp-jaffle-shop
-  node dist/cli.js lineage stg_orders --root /Users/chetan/Lineage-MCP/tmp-jaffle-shop
-  node dist/cli.js impact stg_orders --change rename --root /Users/chetan/Lineage-MCP/tmp-jaffle-shop
-  node dist/cli.js impact users --change rename --column email --new-name user_email --root ./demo
+  lineage scan --root ./my-project
+  lineage tables --root ./my-project
+  lineage lineage users --root ./my-project
+  lineage impact users --change rename --column email --new-name user_email --root ./my-project
 `);
 }
 

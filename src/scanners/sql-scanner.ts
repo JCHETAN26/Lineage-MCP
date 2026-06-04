@@ -1,8 +1,11 @@
 import { basename } from "path";
 import type { TableNode, DependencyNode, ColumnDef } from "../types.js";
 
-const CREATE_TABLE_RE =
-  /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^;]*)\)/gis;
+// Header-only match: locates the start of each CREATE TABLE statement. The
+// body is parsed separately with a balanced-paren walker so a malformed
+// statement (missing close paren) doesn't consume the next valid statement.
+const CREATE_TABLE_HEADER_RE =
+  /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(/gi;
 
 const ALTER_TABLE_RENAME_COL_RE =
   /ALTER\s+TABLE\s+`?(\w+)`?\s+RENAME\s+COLUMN\s+`?(\w+)`?\s+TO\s+`?(\w+)`?/gi;
@@ -46,11 +49,17 @@ export function scanSqlFile(content: string, filePath: string): SqlScanResult {
   const cteNames = extractCteNames(cleanContent);
 
   try {
-    for (const match of cleanContent.matchAll(CREATE_TABLE_RE)) {
-      const tableName = match[1];
-      const columnBlock = match[2];
-      const line = getLineNumber(cleanContent, match.index ?? 0);
-      const columns = parseColumns(columnBlock);
+    // Walk CREATE TABLE headers with a balanced-paren body parser. If the
+    // body never closes (missing `)`) or encounters another CREATE TABLE
+    // before closing, skip the statement entirely so it can't swallow the
+    // next valid one.
+    for (const header of cleanContent.matchAll(CREATE_TABLE_HEADER_RE)) {
+      const tableName = header[1];
+      const bodyStart = (header.index ?? 0) + header[0].length;
+      const parsed = parseBalancedBody(cleanContent, bodyStart);
+      if (!parsed) continue;
+      const line = getLineNumber(cleanContent, header.index ?? 0);
+      const columns = parseColumns(parsed.body);
       tables.push({ type: "table", name: tableName, columns, filePath, line });
     }
 
@@ -175,6 +184,45 @@ function parseColumns(block: string): ColumnDef[] {
     }
   }
   return columns;
+}
+
+/**
+ * Walk a CREATE TABLE body starting just after the opening `(`. Returns the
+ * body text (without the trailing close paren) and the index of the close
+ * paren in `content`. Returns null if the body is malformed:
+ *   - hit `;` before depth returns to 0 (statement terminated unclosed), or
+ *   - hit another `CREATE ... TABLE` keyword before closing, or
+ *   - reached EOF without closing.
+ *
+ * This is what stops a broken CREATE TABLE from greedily eating the next one.
+ */
+function parseBalancedBody(
+  content: string,
+  start: number
+): { body: string; closeIdx: number } | null {
+  let depth = 1;
+  let i = start;
+  const tableKeywordRe = /^CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\b/i;
+  while (i < content.length && depth > 0) {
+    const c = content[i];
+    if (c === "(") {
+      depth++;
+    } else if (c === ")") {
+      depth--;
+      if (depth === 0) {
+        return { body: content.slice(start, i), closeIdx: i };
+      }
+    } else if (c === ";") {
+      return null; // statement terminated without closing paren
+    } else if (
+      (c === "C" || c === "c") &&
+      tableKeywordRe.test(content.slice(i, i + 60))
+    ) {
+      return null; // next CREATE TABLE encountered — current is malformed
+    }
+    i++;
+  }
+  return null;
 }
 
 function stripComments(content: string): string {

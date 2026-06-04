@@ -15,10 +15,13 @@ import { auditPIIComplianceTool, AuditPIIComplianceMCPSchema } from "./tools/aud
 import { syncDbtMetadataTool, SyncDbtMetadataMCPSchema } from "./tools/sync-dbt-metadata.js";
 import { generateHealthReportTool, GenerateHealthReportSchema } from "./tools/generate-health-report.js";
 import type { LineageGraph } from "./types.js";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const server = new Server(
-  { name: "lineage-mcp", version: "0.2.0" },
+  { name: "lineage-mcp", version: "1.0.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -182,7 +185,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     if (name === "ping") {
-      return { content: [{ type: "text", text: "pong — Lineage MCP v0.2.0 ✓" }] };
+      return { content: [{ type: "text", text: "pong — Lineage MCP v1.0.0 ✓" }] };
     }
 
     if (name === "scan") {
@@ -200,7 +203,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "get_sample_project") {
-      const samplePath = resolve(process.cwd(), "samples", "jaffle-shop-lite");
+      const samplePath = resolve(PACKAGE_ROOT, "samples", "jaffle-shop-lite");
       const text =
         `Sample project path: ${samplePath}\n` +
         `Try:\n` +

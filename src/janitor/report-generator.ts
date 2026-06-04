@@ -22,49 +22,65 @@ export interface HealthReport {
 }
 
 /**
- * Calculate health score based on graph state
+ * Health score based on graph state. Empty graphs (0 tables) must NOT score
+ * 100 — that masks misconfiguration where the scanner found nothing.
  */
 function calculateHealthScore(graph: LineageGraph): number {
-  const tables = graph.tables.size || 0;
-  const deps = graph.dependencies.length || 0;
+  const tables = graph.tables.size;
+  const deps = graph.dependencies.length;
   const warnings = (graph.warnings || []).length;
 
-  // Base score: 100
-  // -10 for each warning
-  // Bonus if dependencies exist and are well-connected
-  let score = 100;
+  // No tables = the scanner found nothing useful. Capped low so the report
+  // surfaces this rather than reading green to the user.
+  if (tables === 0) return deps === 0 && warnings === 0 ? 25 : 10;
+
+  let score = 90; // start below 100 so warning-free isn't auto-perfect
   score -= Math.min(warnings * 10, 30);
 
-  if (tables > 0 && deps > 0) {
+  if (deps > 0) {
     const avgDepsPerTable = deps / tables;
-    // Bonus for good connectivity (5-10 deps per table is healthy)
-    if (avgDepsPerTable >= 5 && avgDepsPerTable <= 10) {
-      score += 10;
-    }
+    if (avgDepsPerTable >= 1) score += 5;
+    if (avgDepsPerTable >= 5 && avgDepsPerTable <= 10) score += 5;
+  } else {
+    // Tables exist but nothing references them — likely a parsing gap.
+    score -= 20;
   }
 
   return Math.max(0, Math.min(100, score));
 }
 
 /**
- * Generate Mermaid diagram from the lineage graph
+ * Generate Mermaid diagram from the lineage graph. Every node gets a unique
+ * id derived from the table/file name so the rendered graph reflects real
+ * topology — not every edge collapsing into a single `T -> D` pair as it
+ * did in earlier versions.
  */
 function generateMermaidDiagram(graph: LineageGraph): string {
   const lines: string[] = ["graph LR"];
+  const sanitize = (s: string) => s.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 40);
 
-  // Add table nodes
-  const tables = Array.from(graph.tables.values());
-  for (const table of tables.slice(0, 20)) {
-    // Limit to 20 for readability
-    lines.push(`  T["${table.name}"]`);
+  const tables = Array.from(graph.tables.values()).slice(0, 20);
+  const tableIds = new Map<string, string>();
+  for (const table of tables) {
+    const id = `t_${sanitize(table.name)}`;
+    tableIds.set(table.name, id);
+    lines.push(`  ${id}["${table.name}"]`);
   }
 
-  // Add dependencies (limited to avoid clutter)
   const deps = graph.dependencies.slice(0, 30);
+  const fileIds = new Map<string, string>();
+  let fileCounter = 0;
   for (const dep of deps) {
-    lines.push(
-      `  T -->|"${dep.filePath.split("/").pop()}"| D["${dep.filePath.split("/").slice(-2, -1)}"]`
-    );
+    const tableId = tableIds.get(dep.referencedTable);
+    if (!tableId) continue;
+    let fileId = fileIds.get(dep.filePath);
+    if (!fileId) {
+      fileId = `f${fileCounter++}_${sanitize(dep.filePath.split("/").pop() ?? "file")}`;
+      fileIds.set(dep.filePath, fileId);
+      const label = dep.filePath.split("/").slice(-2).join("/");
+      lines.push(`  ${fileId}["${label}"]`);
+    }
+    lines.push(`  ${tableId} -->|${dep.pattern}| ${fileId}`);
   }
 
   return lines.join("\n");
@@ -118,7 +134,10 @@ export async function generateHealthReport(
   graph: LineageGraph,
   options: HealthReportOptions = {}
 ): Promise<HealthReport> {
-  const { outputPath = ".lineage/lineage_health_report.md", includeDiagram = true } = options;
+  // outputPath is opt-in. The previous default wrote the file unconditionally
+  // into a cwd-relative path, surprising callers that just wanted the
+  // structured report in memory.
+  const { outputPath, includeDiagram = true } = options;
 
   const tables = graph.tables.size || 0;
   const deps = graph.dependencies.length || 0;
@@ -143,7 +162,7 @@ export async function generateHealthReport(
   // Generate markdown content
   const markdown = formatHealthReportMarkdown(report);
 
-  // Write to file if path provided
+  // Write to file only when the caller explicitly requested an outputPath.
   if (outputPath) {
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, markdown, "utf-8");

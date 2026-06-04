@@ -56,6 +56,8 @@ export interface AffectedFile {
 
 export interface LineageResult {
   asset: { table: string; column?: string };
+  /** Where the table is defined in the codebase. Undefined when the asset is unknown to the graph. */
+  definition?: TableNode;
   consumers: DependencyNode[];
   upstream: TableNode[];
   tree: string;

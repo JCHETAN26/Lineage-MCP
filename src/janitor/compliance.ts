@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LineageGraph, TableNode, ColumnDef } from "../types.js";
+import type { LineageGraph, TableNode } from "../types.js";
 
 export const AuditPIIComplianceSchema = z.object({
   graph: z.any().describe("The lineage graph to audit"),
@@ -85,29 +85,38 @@ function checkPIIRisk(columnName: string): { riskLevel: "high" | "medium" | "low
 export async function auditPIICompliance(
   input: AuditPIIComplianceInput
 ): Promise<PIIComplianceReport> {
-  const { graph, tables: specifiedTables } = input;
+  const graph = input.graph as LineageGraph;
+  const specifiedTables = input.tables;
 
   const findings: PIIFinding[] = [];
-  const tablesToAudit = specifiedTables || Object.keys(graph.tables || {});
+  // graph.tables is a Map<string, TableNode> — not a plain object.
+  // The previous implementation used Object.keys(map) which always returned []
+  // and so produced an empty audit. Use Map iteration instead.
+  const tablesToAudit = specifiedTables ?? Array.from(graph.tables.keys());
 
   for (const tableName of tablesToAudit) {
-    const table = graph.tables?.[tableName] as TableNode | undefined;
+    const table: TableNode | undefined = graph.tables.get(tableName);
     if (!table) continue;
 
-    // Check each column in the table
     for (const column of table.columns || []) {
       const { riskLevel, reasons } = checkPIIRisk(column.name);
 
       if (riskLevel !== "low") {
-        // Find downstream dependencies (who consumes this column)
-        const flows = graph.edges
-          ?.filter((edge: any) => edge.source === `${tableName}.${column.name}`)
-          .map((edge: any) => ({
+        // Trace downstream consumers via graph.dependencies (the graph type
+        // has no `edges` field — that was a stale reference). A dep with
+        // matching referencedTable/referencedColumn is a downstream flow.
+        const flows = graph.dependencies
+          .filter(
+            (d) =>
+              d.referencedTable === tableName &&
+              (d.referencedColumn ? d.referencedColumn === column.name : true)
+          )
+          .map((d) => ({
             fromTable: tableName,
             fromColumn: column.name,
-            toFile: edge.target || "unknown",
-            toLine: edge.line || 0,
-          })) || [];
+            toFile: d.filePath,
+            toLine: d.line,
+          }));
 
         findings.push({
           table: tableName,
@@ -127,7 +136,8 @@ export async function auditPIICompliance(
 
   return {
     timestamp: new Date().toISOString(),
-    totalTablesScanned: tablesToAudit.length,
+    // Only count tables that actually existed in the graph.
+    totalTablesScanned: tablesToAudit.filter((t) => graph.tables.has(t)).length,
     findingsCount: findings.length,
     findings,
     summary,

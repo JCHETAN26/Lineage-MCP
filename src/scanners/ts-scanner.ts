@@ -90,17 +90,30 @@ export function scanTsFile(content: string, filePath: string): DependencyNode[] 
       for (const tableName of tables) {
         if (!tableName || tableName.length < 2) continue;
         if (RESERVED_WORDS.has(tableName.toUpperCase())) continue;
-        deps.push({
-          type: "dependency",
-          filePath,
-          line,
-          pattern: label,
-          provenance,
-          evidenceType: label === "prisma" ? "heuristic" : "heuristic",
-          referencedTable: tableName,
-          confidence,
-          language,
-        });
+
+        // Prisma model names follow JS conventions (singular `prisma.user`)
+        // while SQL tables are usually plural (`users`). Emit both variants
+        // so a query against either name resolves the reference. Real schemas
+        // can override the mapping via @@map("custom_name"), which this
+        // heuristic does not parse — covers the common case, not all of them.
+        const variants =
+          label === "prisma" && /^[a-z]/.test(tableName) && !tableName.endsWith("s")
+            ? [tableName, tableName + "s"]
+            : [tableName];
+
+        for (const variant of variants) {
+          deps.push({
+            type: "dependency",
+            filePath,
+            line,
+            pattern: label,
+            provenance,
+            evidenceType: "heuristic",
+            referencedTable: variant,
+            confidence,
+            language,
+          });
+        }
       }
     }
   }

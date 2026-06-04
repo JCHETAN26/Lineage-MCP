@@ -70,12 +70,15 @@ const TABLE_EXTRACTOR_RE = /\b(?:FROM|JOIN)\s+(\w+)/gi;
 
 export function scanPythonFile(content: string, filePath: string): DependencyNode[] {
   const deps: DependencyNode[] = [];
-  const lines = content.split("\n");
+  // Strip `#` comments and triple-quoted docstrings so SQL-shaped text hiding
+  // in them doesn't produce false positives. Newlines are preserved so line
+  // numbers in the output remain accurate against the original file.
+  const scanned = stripPythonNonCode(content);
 
   for (const { re, confidence, label, provenance } of PATTERNS) {
     re.lastIndex = 0;
-    for (const match of content.matchAll(re)) {
-      const line = getLineNumber(content, match.index ?? 0);
+    for (const match of scanned.matchAll(re)) {
+      const line = getLineNumber(scanned, match.index ?? 0);
       const fullMatch = match[0];
       const capturedValue = match[1] ?? "";
 
@@ -128,6 +131,78 @@ function extractTableNames(capturedValue: string, fullMatch: string): string[] {
 
 function getLineNumber(content: string, index: number): number {
   return content.slice(0, index).split("\n").length;
+}
+
+/**
+ * Replace Python comments and triple-quoted string contents with spaces,
+ * preserving newlines and overall length so byte offsets/line numbers stay valid.
+ * Single-line string literals are left alone — real queries live there.
+ */
+export function stripPythonNonCode(source: string): string {
+  const out: string[] = [];
+  let i = 0;
+  let inTriple: '"""' | "'''" | null = null;
+  let inSingle: '"' | "'" | null = null;
+
+  while (i < source.length) {
+    const c = source[i];
+
+    if (inTriple) {
+      if (source.startsWith(inTriple, i)) {
+        out.push(inTriple);
+        i += 3;
+        inTriple = null;
+        continue;
+      }
+      out.push(c === "\n" ? "\n" : " ");
+      i++;
+      continue;
+    }
+
+    if (inSingle) {
+      if (c === "\\" && i + 1 < source.length) {
+        out.push(c, source[i + 1]);
+        i += 2;
+        continue;
+      }
+      if (c === inSingle || c === "\n") {
+        inSingle = null;
+      }
+      out.push(c);
+      i++;
+      continue;
+    }
+
+    if (source.startsWith('"""', i)) {
+      out.push('"""');
+      i += 3;
+      inTriple = '"""';
+      continue;
+    }
+    if (source.startsWith("'''", i)) {
+      out.push("'''");
+      i += 3;
+      inTriple = "'''";
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inSingle = c;
+      out.push(c);
+      i++;
+      continue;
+    }
+    if (c === "#") {
+      while (i < source.length && source[i] !== "\n") {
+        out.push(" ");
+        i++;
+      }
+      continue;
+    }
+    out.push(c);
+    i++;
+  }
+
+  return out.join("");
 }
 
 function deduplicateDeps(deps: DependencyNode[]): DependencyNode[] {
