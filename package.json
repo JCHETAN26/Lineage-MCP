@@ -29,7 +29,9 @@
     "cli": "node dist/cli.js",
     "start": "node dist/index.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "release": "bash scripts/release.sh",
+    "release:dry": "npm run build && npm pack --dry-run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
